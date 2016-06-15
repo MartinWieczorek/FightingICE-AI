@@ -8,6 +8,8 @@ import commandcenter.CommandCenter;
 import enumerate.Action;
 import java.util.*;
 
+// test git branch
+
 public class FightingGameAI implements AIInterface {
 
 	private Key inputKey;
