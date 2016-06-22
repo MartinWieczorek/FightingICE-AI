@@ -3,9 +3,11 @@ import structs.CharacterData;
 import structs.FrameData;
 import structs.GameData;
 import structs.Key;
-
+import structs.MotionData;
 import commandcenter.CommandCenter;
 import enumerate.Action;
+import fighting.Attack;
+
 import java.util.*;
 
 // test git branch
@@ -31,6 +33,7 @@ public class FightingGameAI implements AIInterface {
 	
 	/** self information */
 	private CharacterData myCharacter;
+	private Vector<MotionData> myMotionData;
 	private int myHpLastFrame;
 
 	/** opponent information */
@@ -44,7 +47,7 @@ public class FightingGameAI implements AIInterface {
 	public void close() 
 	{
 		// TODO Auto-generated method stub
-
+		
 	}
 
 	@Override
@@ -71,13 +74,14 @@ public class FightingGameAI implements AIInterface {
 	}
 
 	@Override
-	public int initialize(GameData arg0, boolean player) 
+	public int initialize(GameData gameData, boolean player) 
 	{
 		// TODO Auto-generated method stub
 		inputKey = new Key();
 		this.player = player;  // own player (enemy is negated)
 		frameData = new FrameData();
 		commandCenter = new CommandCenter();
+		myMotionData = gameData.getMyMotion(player);
 		
 		pastActions = new ArrayList<>();
 		
@@ -139,20 +143,29 @@ public class FightingGameAI implements AIInterface {
 			if(commandCenter.getskillFlag()){
 				inputKey = commandCenter.getSkillKey();
 			}else{
+				//measureEnergyConsuption();
+				// you find energy consuption in: 
+				// myMotionData.elementAt(Action.AIR_D_DF_FB.ordinal()).attackStartAddEnergy
+				
 				if(detectHPdiff(myCharacter, oppCharacter)){
 					System.out.println("hp diff");
 					currentScore = calcScore(myCharacter, oppCharacter);
-					System.out.println("score: " + currentScore);
+					//System.out.println("score: " + currentScore);
 					updateActionValues((float) (currentScore * 0.01));
 				}
 				
-				
 				int energy = myCharacter.getEnergy();
-				//System.out.println(Arrays.toString(actionProbability));
 				
-				String chosenAction = choseAction();
+				String chosenAction;
+				// move or action (20:80)
+				float randomNumber = new Random().nextFloat();
+				if(randomNumber < 0.0){
+					chosenAction = chooseMovement();
+				}
+				else{
+					chosenAction = chooseAction();
+				}
 				//System.out.println(chosenAction);
-				
 				
 				if(energy >= 300){
 					commandCenter.commandCall( Action.STAND_D_DF_FC.name() );
@@ -208,8 +221,7 @@ public class FightingGameAI implements AIInterface {
 		}
 		
 		pastActions.clear();
-		System.out.println(Arrays.toString(actionValue));
-		//updateProbabilities();
+		//System.out.println(Arrays.toString(actionValue));
 	}
 	
 	private void updateProbabilities(Action[] actionSet)
@@ -233,27 +245,30 @@ public class FightingGameAI implements AIInterface {
 		
 	}
 	
-	private String choseAction()
+	private String chooseMovement()
+	{
+		int index = new Random().nextInt(moveActions.length);
+		int chosenMovement = moveActions[index].ordinal();
+		return Action.values()[chosenMovement].name();
+	}
+	
+	private String chooseAction()
 	{
 		// select action based on probability
 		int index = 0;
 		int distance = commandCenter.getDistanceX();
-		if(distance >= 150){
+		if(distance >= 180){
 			// long distance
 			//System.out.println("far distance: " + distance);
-			if (myCharacter.energy > 50){
-				index = roulletWheel(farActions);
-			}
-			else{
-				return Action.STAND_D_DF_FA.name();
-			}
+			index = roulletWheel(farActions);
+
 		}
 //		else if(distance < 300 && distance >= 150){
 //			// mid range
 //			//System.out.println("mid distance: " + distance);
 //			index = roulletWheel(midActions);
 //		}
-		else if(distance < 150){
+		else if(distance < 180){
 			// close combat
 			//System.out.println("near distance: " + distance);
 			index = roulletWheel(nearActions);
@@ -261,25 +276,34 @@ public class FightingGameAI implements AIInterface {
 		
 		// list next action for scoring
 		pastActions.add(Action.values()[index]);
-		System.out.println(Action.values()[index].name() + " " + index);
+		//System.out.println(Action.values()[index].name() + " " + index);
 		return Action.values()[index].name();
 	}
 	
 	private int roulletWheel(Action[] actionSet)
 	{
-		updateProbabilities(actionSet);
+		// find all skills for which enough energy is available
+		Action[] reducedActionSet = null;
+		List<Enum<Action>> actions = new ArrayList<>();
+		for (int i = 0; i < actionSet.length; i++){
+			if(myCharacter.getEnergy() >= -myMotionData.elementAt(actionSet[i].ordinal()).attackStartAddEnergy)
+				actions.add(actionSet[i]);
+		}
+		reducedActionSet = actions.toArray(new Action[1]);
+		
+		updateProbabilities(reducedActionSet);
 		int index = 0;
 		float summedProb = 0;
 		float randomNumber = new Random().nextFloat();
 		
-		for (int i = 0; i < actionSet.length; i++){
-			summedProb += actionProbability[actionSet[i].ordinal()];
+		for (int i = 0; i < reducedActionSet.length; i++){
+			summedProb += actionProbability[reducedActionSet[i].ordinal()];
 			if(randomNumber < summedProb){
 				index = i;
 				break;
 			}
 		}
-		return actionSet[index].ordinal();
+		return reducedActionSet[index].ordinal();
 	}
 
 }
