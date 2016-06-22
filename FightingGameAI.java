@@ -165,7 +165,7 @@ public class FightingGameAI implements AIInterface {
 				else{
 					chosenAction = chooseAction();
 				}
-				//System.out.println(chosenAction);
+				System.out.println(chosenAction);
 				
 				if(energy >= 300){
 					commandCenter.commandCall( Action.STAND_D_DF_FC.name() );
@@ -226,6 +226,9 @@ public class FightingGameAI implements AIInterface {
 	
 	private void updateProbabilities(Action[] actionSet)
 	{
+		if(actionSet.length == 0)
+			return;
+		
 		float summedScore = 0;
 		
 		for(int i = 0; i < actionSet.length; i++){
@@ -286,10 +289,14 @@ public class FightingGameAI implements AIInterface {
 		Action[] reducedActionSet = null;
 		List<Enum<Action>> actions = new ArrayList<>();
 		for (int i = 0; i < actionSet.length; i++){
+			//System.out.println("energy: " + myCharacter.energy + " needed: " + -myMotionData.elementAt(actionSet[i].ordinal()).attackStartAddEnergy);
 			if(myCharacter.getEnergy() >= -myMotionData.elementAt(actionSet[i].ordinal()).attackStartAddEnergy)
 				actions.add(actionSet[i]);
 		}
-		reducedActionSet = actions.toArray(new Action[1]);
+		reducedActionSet = actions.toArray(new Action[0]);
+		
+		if(reducedActionSet.length == 0)
+			return Action.STAND_GUARD_RECOV.ordinal(); //if no action remains, then action guard
 		
 		updateProbabilities(reducedActionSet);
 		int index = 0;
