@@ -20,6 +20,7 @@ public class FightingGameAI implements AIInterface {
 	private CommandCenter commandCenter;
 	
 	private List<Enum<Action>> pastActions;
+	private List<Enum<Action>> pastEnemyActions;
 	private Action[] groundActions;
 	private Action[] airActions;
 	private Action[] nearActions;
@@ -28,8 +29,11 @@ public class FightingGameAI implements AIInterface {
 	private Action[] farActionsEnergy;
 	private Action[] moveActions;
 	private Action[] guardActions;
-	private float[] actionValue;
-	private float[] actionProbability;
+	private float[][] actionValue;
+	private float[][] actionProbability;
+	private int [] actionMaxRange;
+	private int [] actionMinRange;
+	int distance;
 	
 	/** self information */
 	private CharacterData myCharacter;
@@ -47,7 +51,9 @@ public class FightingGameAI implements AIInterface {
 	public void close() 
 	{
 		// TODO Auto-generated method stub
-		
+		for (int i = 0; i < actionMaxRange.length; i++){
+			System.out.println(Action.values()[i].name() + " has range: " + actionMinRange[i] + " - " + actionMaxRange[i]);
+		}
 	}
 
 	@Override
@@ -84,6 +90,7 @@ public class FightingGameAI implements AIInterface {
 		myMotionData = gameData.getMyMotion(player);
 		
 		pastActions = new ArrayList<>();
+		pastEnemyActions = new ArrayList<>();
 		
 		groundActions = new Action[] {Action.STAND_D_DB_BA, Action.BACK_STEP, Action.FORWARD_WALK, Action.DASH,
                 Action.JUMP, Action.FOR_JUMP, Action.BACK_JUMP, Action.STAND_GUARD,
@@ -112,13 +119,21 @@ public class FightingGameAI implements AIInterface {
 		                Action.AIR_D_DB_BB};
 		
 		System.out.println("size of actions" + Action.values().length);
-		actionValue = new float[Action.values().length]; // groundActions.length + airActions.length];
-		actionProbability = new float[actionValue.length];
+
+		actionValue = new float[Action.values().length][Action.values().length];	// rows = myActions; cols = enemyActions
+		actionProbability = new float[Action.values().length][Action.values().length];
+		actionMaxRange = new int[Action.values().length];
+		actionMinRange = new int[Action.values().length];
 		float prob = 1.0f / actionProbability.length;
 		for (int i = 0; i < actionValue.length; i++){
-			actionValue[i] = 0.5f;
-			actionProbability[i] = prob;
+			actionMaxRange[i] = 0;
+			actionMinRange[i] = 1000;
+			for (int j = 0; j < Action.values().length; j++){
+				actionValue[i][j] = 0.5f;
+				actionProbability[i][j] = prob;
+			}			
 		}
+		
 		
 		myHpLastFrame = 0;
 		oppHpLastFrame = 0;
@@ -143,11 +158,13 @@ public class FightingGameAI implements AIInterface {
 			if(commandCenter.getskillFlag()){
 				inputKey = commandCenter.getSkillKey();
 			}else{
+				long startTime = System.nanoTime();
 				//measureEnergyConsuption();
 				// you find energy consuption in: 
 				// myMotionData.elementAt(Action.AIR_D_DF_FB.ordinal()).attackStartAddEnergy
 				
 				if(detectHPdiff(myCharacter, oppCharacter)){
+					calcLastActionsRange();
 					System.out.println("hp diff");
 					currentScore = calcScore(myCharacter, oppCharacter);
 					//System.out.println("score: " + currentScore);
@@ -155,23 +172,37 @@ public class FightingGameAI implements AIInterface {
 				}
 				
 				int energy = myCharacter.getEnergy();
+				distance = commandCenter.getDistanceX();
 				
 				String chosenAction;
 				// move or action (20:80)
 				float randomNumber = new Random().nextFloat();
-				if(randomNumber < 0.0){
+				if(randomNumber < 0.1){
 					chosenAction = chooseMovement();
 				}
 				else{
 					chosenAction = chooseAction();
 				}
-				System.out.println(chosenAction);
+				//System.out.println(chosenAction);
 				
 				if(energy >= 300){
 					commandCenter.commandCall( Action.STAND_D_DF_FC.name() );
 				}else
 					commandCenter.commandCall( chosenAction );
+				
+				long endtime = System.nanoTime();
+				//System.out.println("time needed: " + ((endtime - startTime)/1e6));
 			}
+		}
+	}
+	
+	private void calcLastActionsRange()
+	{
+		if(distance > actionMaxRange[pastActions.get(pastActions.size()-1).ordinal()] && oppCharacter.hp != oppHpLastFrame){
+			actionMaxRange[pastActions.get(pastActions.size()-1).ordinal()] = distance;
+		}
+		if(distance < actionMinRange[pastActions.get(pastActions.size()-1).ordinal()] && oppCharacter.hp != oppHpLastFrame){
+			actionMinRange[pastActions.get(pastActions.size()-1).ordinal()] = distance;
 		}
 	}
 	
@@ -209,18 +240,20 @@ public class FightingGameAI implements AIInterface {
 		
 		if(!pastActions.isEmpty()){
 			for (int i = 0; i < pastActions.size(); i++){
-				Enum<Action> index = pastActions.get(i);
+				Enum<Action> myAction = pastActions.get(i);
+				Enum<Action> enemyAction = pastEnemyActions.get(i);
 				//System.out.println(index.ordinal());
-				actionValue[index.ordinal()] += score * discountFaktor; 
-				if(actionValue[index.ordinal()] < 0)
-					actionValue[index.ordinal()] = 0.0001f;
-				if(actionValue[index.ordinal()] > 1)
-					actionValue[index.ordinal()] = 1.0f;
+				actionValue[myAction.ordinal()][enemyAction.ordinal()] += score * discountFaktor;
+				if(actionValue[myAction.ordinal()][enemyAction.ordinal()] < 0)
+					actionValue[myAction.ordinal()][enemyAction.ordinal()] = 0.0001f;
+				if(actionValue[myAction.ordinal()][enemyAction.ordinal()] > 1)
+					actionValue[myAction.ordinal()][enemyAction.ordinal()] = 1.0f;
 				discountFaktor *= discountValue;
 			}
 		}
 		
 		pastActions.clear();
+		pastEnemyActions.clear();
 		//System.out.println(Arrays.toString(actionValue));
 	}
 	
@@ -230,9 +263,10 @@ public class FightingGameAI implements AIInterface {
 			return;
 		
 		float summedScore = 0;
+		Enum<Action> enemyAction = oppCharacter.getAction();
 		
 		for(int i = 0; i < actionSet.length; i++){
-			summedScore += actionValue[actionSet[i].ordinal()];
+			summedScore += actionValue[actionSet[i].ordinal()][enemyAction.ordinal()];
 		}
 		
 		// should not happen
@@ -241,7 +275,7 @@ public class FightingGameAI implements AIInterface {
 		}
 		
 		for(int i = 0; i < actionSet.length; i++){
-			actionProbability[actionSet[i].ordinal()] = actionValue[actionSet[i].ordinal()] / summedScore;
+			actionProbability[actionSet[i].ordinal()][enemyAction.ordinal()] = actionValue[actionSet[i].ordinal()][enemyAction.ordinal()] / summedScore;
 		}
 		
 		//System.out.println(Arrays.toString(actionProbability));
@@ -279,6 +313,7 @@ public class FightingGameAI implements AIInterface {
 		
 		// list next action for scoring
 		pastActions.add(Action.values()[index]);
+		pastEnemyActions.add(oppCharacter.getAction());
 		//System.out.println(Action.values()[index].name() + " " + index);
 		return Action.values()[index].name();
 	}
@@ -295,16 +330,20 @@ public class FightingGameAI implements AIInterface {
 		}
 		reducedActionSet = actions.toArray(new Action[0]);
 		
-		if(reducedActionSet.length == 0)
-			return Action.STAND_GUARD_RECOV.ordinal(); //if no action remains, then action guard
+		if(reducedActionSet.length == 0){
+			int randomNumber = new Random().nextInt(56);
+			return randomNumber; //if no action remains, then action guard
+		}
+			
 		
 		updateProbabilities(reducedActionSet);
+		Enum<Action> enemyAction = oppCharacter.getAction();
 		int index = 0;
 		float summedProb = 0;
 		float randomNumber = new Random().nextFloat();
 		
 		for (int i = 0; i < reducedActionSet.length; i++){
-			summedProb += actionProbability[reducedActionSet[i].ordinal()];
+			summedProb += actionProbability[reducedActionSet[i].ordinal()][enemyAction.ordinal()];
 			if(randomNumber < summedProb){
 				index = i;
 				break;
