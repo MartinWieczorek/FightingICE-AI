@@ -6,8 +6,14 @@ import structs.Key;
 import structs.MotionData;
 import commandcenter.CommandCenter;
 import enumerate.Action;
+import enumerate.State;
 import fighting.Attack;
 
+import java.io.BufferedReader;
+import java.io.File;
+import java.io.FileReader;
+import java.io.IOException;
+import java.io.PrintWriter;
 import java.util.*;
 
 // test git branch
@@ -23,6 +29,7 @@ public class FightingGameAI implements AIInterface {
 	private List<Enum<Action>> pastEnemyActions;
 	private Action[] groundActions;
 	private Action[] airActions;
+	private Action[] attackActions;
 	private Action[] nearActions;
 	private Action[] midActions;
 	private Action[] farActions;
@@ -34,11 +41,19 @@ public class FightingGameAI implements AIInterface {
 	private int [] actionMaxRange;
 	private int [] actionMinRange;
 	int distance;
+	int numberGames;
+	
+	/** save/read data */
+	File fileMaxRange;
+	File fileMinRange;
+	PrintWriter pw;
+	BufferedReader br;
 	
 	/** self information */
 	private CharacterData myCharacter;
 	private Vector<MotionData> myMotionData;
 	private int myHpLastFrame;
+	private String myName;
 
 	/** opponent information */
 	private CharacterData oppCharacter;
@@ -51,8 +66,33 @@ public class FightingGameAI implements AIInterface {
 	public void close() 
 	{
 		// TODO Auto-generated method stub
-		for (int i = 0; i < actionMaxRange.length; i++){
-			System.out.println(Action.values()[i].name() + " has range: " + actionMinRange[i] + " - " + actionMaxRange[i]);
+//		for (int i = 0; i < actionMaxRange.length; i++){
+//			System.out.println(Action.values()[i].name() + " has range: " + actionMinRange[i] + " - " + actionMaxRange[i]);
+//		}
+//		System.out.println("numberGames: " + numberGames);
+		
+		// write data
+		try {
+			pw = new PrintWriter(fileMaxRange);
+			for (int i = 0; i < actionMaxRange.length; i++){
+				pw.println(actionMaxRange[i]);
+			}
+			pw.println(numberGames + 1);
+			pw.close();
+		} catch (IOException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+		
+		try {
+			pw = new PrintWriter(fileMinRange);
+			for (int i = 0; i < actionMinRange.length; i++){
+				pw.println(actionMinRange[i]);
+			}
+			pw.close();
+		} catch (IOException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
 		}
 	}
 
@@ -83,6 +123,8 @@ public class FightingGameAI implements AIInterface {
 	public int initialize(GameData gameData, boolean player) 
 	{
 		// TODO Auto-generated method stub
+		myName = gameData.getMyName(player);
+		
 		inputKey = new Key();
 		this.player = player;  // own player (enemy is negated)
 		frameData = new FrameData();
@@ -95,6 +137,16 @@ public class FightingGameAI implements AIInterface {
 		groundActions = new Action[] {Action.STAND_D_DB_BA, Action.BACK_STEP, Action.FORWARD_WALK, Action.DASH,
                 Action.JUMP, Action.FOR_JUMP, Action.BACK_JUMP, Action.STAND_GUARD,
                 Action.CROUCH_GUARD, Action.THROW_A, Action.THROW_B, Action.STAND_A, Action.STAND_B,
+                Action.CROUCH_A, Action.CROUCH_B, Action.STAND_FA, Action.STAND_FB, Action.CROUCH_FA,
+                Action.CROUCH_FB, Action.STAND_D_DF_FA, Action.STAND_D_DF_FB, Action.STAND_F_D_DFA,
+                Action.STAND_F_D_DFB, Action.STAND_D_DB_BB};
+		
+		airActions = new Action[] {Action.AIR_A, Action.AIR_B, Action.AIR_DA, Action.AIR_DB,
+                Action.AIR_FA, Action.AIR_FB, Action.AIR_UA, Action.AIR_UB, Action.AIR_D_DF_FA,
+                Action.AIR_D_DF_FB, Action.AIR_F_D_DFA, Action.AIR_F_D_DFB, Action.AIR_D_DB_BA,
+                Action.AIR_D_DB_BB};
+		
+		attackActions = new Action[] {Action.STAND_D_DB_BA, Action.THROW_A, Action.THROW_B, Action.STAND_A, Action.STAND_B,
                 Action.CROUCH_A, Action.CROUCH_B, Action.STAND_FA, Action.STAND_FB, Action.CROUCH_FA,
                 Action.CROUCH_FB, Action.STAND_D_DF_FA, Action.STAND_D_DF_FB, Action.STAND_F_D_DFA,
                 Action.STAND_F_D_DFB, Action.STAND_D_DB_BB};
@@ -113,10 +165,7 @@ public class FightingGameAI implements AIInterface {
 		
 		guardActions = new Action[] {Action.STAND_GUARD, Action.CROUCH_GUARD};
 		
-		airActions = new Action[] {Action.AIR_GUARD, Action.AIR_A, Action.AIR_B, Action.AIR_DA, Action.AIR_DB,
-		                Action.AIR_FA, Action.AIR_FB, Action.AIR_UA, Action.AIR_UB, Action.AIR_D_DF_FA,
-		                Action.AIR_D_DF_FB, Action.AIR_F_D_DFA, Action.AIR_F_D_DFB, Action.AIR_D_DB_BA,
-		                Action.AIR_D_DB_BB};
+		
 		
 		System.out.println("size of actions" + Action.values().length);
 
@@ -134,11 +183,42 @@ public class FightingGameAI implements AIInterface {
 			}			
 		}
 		
-		
+		numberGames = 0;
 		myHpLastFrame = 0;
 		oppHpLastFrame = 0;
 		currentScore = 0;
 		pastActions.clear();
+		
+		// read data from file
+		fileMaxRange = new File("data/aiData/Singularity/" + myName + "maxRange.txt");
+		fileMinRange = new File("data/aiData/Singularity/" + myName + "minRange.txt");
+		
+		try {
+			br = new BufferedReader(new FileReader(fileMaxRange));
+			for (int i = 0; i < actionMaxRange.length; i++){
+				String line = br.readLine();
+				actionMaxRange[i] = Integer.parseInt(line);
+			}
+			String line = br.readLine();
+			numberGames = Integer.parseInt(line);
+			br.close();
+		} catch (IOException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+		
+		try {
+			br = new BufferedReader(new FileReader(fileMinRange));
+			for (int i = 0; i < actionMinRange.length; i++){
+				String line = br.readLine();
+				actionMinRange[i] = Integer.parseInt(line);
+				//System.out.println("data " + i + ":" + actionMinRange[i] + " - " + actionMaxRange[i]);
+			}
+			br.close();
+		} catch (IOException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
 		
 		return 0;
 	}
@@ -159,6 +239,9 @@ public class FightingGameAI implements AIInterface {
 				inputKey = commandCenter.getSkillKey();
 			}else{
 				long startTime = System.nanoTime();
+				
+				commandCenter.skillCancel();
+				
 				//measureEnergyConsuption();
 				// you find energy consuption in: 
 				// myMotionData.elementAt(Action.AIR_D_DF_FB.ordinal()).attackStartAddEnergy
@@ -198,10 +281,15 @@ public class FightingGameAI implements AIInterface {
 	
 	private void calcLastActionsRange()
 	{
-		if(distance > actionMaxRange[pastActions.get(pastActions.size()-1).ordinal()] && oppCharacter.hp != oppHpLastFrame){
+		if(pastActions.size() == 0)
+			return;
+		
+		if(distance > actionMaxRange[pastActions.get(pastActions.size()-1).ordinal()] && oppCharacter.hp != oppHpLastFrame
+				&& (distance < actionMaxRange[pastActions.get(pastActions.size()-1).ordinal()] + 100 || actionMaxRange[pastActions.get(pastActions.size()-1).ordinal()] == 0 )){
 			actionMaxRange[pastActions.get(pastActions.size()-1).ordinal()] = distance;
 		}
-		if(distance < actionMinRange[pastActions.get(pastActions.size()-1).ordinal()] && oppCharacter.hp != oppHpLastFrame){
+		if(distance < actionMinRange[pastActions.get(pastActions.size()-1).ordinal()] && oppCharacter.hp != oppHpLastFrame
+				&& (distance > actionMinRange[pastActions.get(pastActions.size()-1).ordinal()] - 100 || actionMinRange[pastActions.get(pastActions.size()-1).ordinal()] == 1000)){
 			actionMinRange[pastActions.get(pastActions.size()-1).ordinal()] = distance;
 		}
 	}
@@ -254,7 +342,7 @@ public class FightingGameAI implements AIInterface {
 		
 		pastActions.clear();
 		pastEnemyActions.clear();
-		//System.out.println(Arrays.toString(actionValue));
+		//printActionValues();
 	}
 	
 	private void updateProbabilities(Action[] actionSet)
@@ -311,6 +399,13 @@ public class FightingGameAI implements AIInterface {
 			index = roulletWheel(nearActions);
 		}
 		
+//		Action[] actionInRange;
+//		if(myCharacter.getState() == State.AIR && commandCenter.getDistanceY() < 300)
+//			actionInRange = filterActionRange(airActions);
+//		else
+//			actionInRange = filterActionRange(attackActions);
+//		
+//		index = roulletWheel(actionInRange);
 		// list next action for scoring
 		pastActions.add(Action.values()[index]);
 		pastEnemyActions.add(oppCharacter.getAction());
@@ -331,10 +426,9 @@ public class FightingGameAI implements AIInterface {
 		reducedActionSet = actions.toArray(new Action[0]);
 		
 		if(reducedActionSet.length == 0){
-			int randomNumber = new Random().nextInt(56);
-			return randomNumber; //if no action remains, then action guard
+			//int randomNumber = new Random().nextInt(56);
+			return Action.FOR_JUMP.ordinal(); //if no action remains, then jump_forward
 		}
-			
 		
 		updateProbabilities(reducedActionSet);
 		Enum<Action> enemyAction = oppCharacter.getAction();
@@ -350,6 +444,33 @@ public class FightingGameAI implements AIInterface {
 			}
 		}
 		return reducedActionSet[index].ordinal();
+	}
+	
+	private Action[] filterActionRange(Action[] actionSet){
+		Action[] filteredActionSet = null;
+		List<Enum<Action>> actions = new ArrayList<>();
+		
+		int rangeExtension = 10 + 100 / (1 +  numberGames);
+		
+		for (int i = 0; i < actionSet.length; i++){
+			//System.out.println("energy: " + myCharacter.energy + " needed: " + -myMotionData.elementAt(actionSet[i].ordinal()).attackStartAddEnergy);
+			if(distance > actionMinRange[actionSet[i].ordinal()] - rangeExtension
+				&& distance < actionMaxRange[actionSet[i].ordinal()] + rangeExtension 
+				|| actionMaxRange[actionSet[i].ordinal()] <= 0)
+			{
+				actions.add(actionSet[i]);
+			}
+		}
+		filteredActionSet = actions.toArray(new Action[0]);
+		
+		return filteredActionSet;
+	}
+	
+	private void printActionValues(){
+		for(int i = 0; i < Action.values().length; i++)
+			for (int j = 0; j < Action.values().length; j++)
+				System.out.print(actionValue[i][j] + " ");
+		System.out.println(" ");
 	}
 
 }
