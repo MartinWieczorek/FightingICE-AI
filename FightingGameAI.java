@@ -322,21 +322,22 @@ public class FightingGameAI implements AIInterface {
 	
 	private void updateActionValues(float score)
 	{
-		// TODO: limit actionValues from 0 to 1
 		float discountValue = 0.5f;
 		float discountFaktor = 1.0f;
+		//System.out.println("update score: " + score );
 		
 		if(!pastActions.isEmpty()){
 			for (int i = 0; i < pastActions.size(); i++){
 				Enum<Action> myAction = pastActions.get(i);
 				Enum<Action> enemyAction = pastEnemyActions.get(i);
-				//System.out.println(index.ordinal());
+				//System.out.println("before update: " + actionValue[myAction.ordinal()][enemyAction.ordinal()]);
 				actionValue[myAction.ordinal()][enemyAction.ordinal()] += score * discountFaktor;
 				if(actionValue[myAction.ordinal()][enemyAction.ordinal()] < 0)
 					actionValue[myAction.ordinal()][enemyAction.ordinal()] = 0.0001f;
 				if(actionValue[myAction.ordinal()][enemyAction.ordinal()] > 1)
 					actionValue[myAction.ordinal()][enemyAction.ordinal()] = 1.0f;
 				discountFaktor *= discountValue;
+				//System.out.println("after update: " + actionValue[myAction.ordinal()][enemyAction.ordinal()]);
 			}
 		}
 		
@@ -354,6 +355,7 @@ public class FightingGameAI implements AIInterface {
 		Enum<Action> enemyAction = oppCharacter.getAction();
 		
 		for(int i = 0; i < actionSet.length; i++){
+			//System.out.println("prob: " + actionValue[actionSet[i].ordinal()][enemyAction.ordinal()]);
 			summedScore += actionValue[actionSet[i].ordinal()][enemyAction.ordinal()];
 		}
 		
@@ -364,9 +366,8 @@ public class FightingGameAI implements AIInterface {
 		
 		for(int i = 0; i < actionSet.length; i++){
 			actionProbability[actionSet[i].ordinal()][enemyAction.ordinal()] = actionValue[actionSet[i].ordinal()][enemyAction.ordinal()] / summedScore;
+			System.out.println(actionSet[i].name() + ": " + actionProbability[actionSet[i].ordinal()][enemyAction.ordinal()]);
 		}
-		
-		//System.out.println(Arrays.toString(actionProbability));
 		
 	}
 	
@@ -384,7 +385,7 @@ public class FightingGameAI implements AIInterface {
 		int distance = commandCenter.getDistanceX();
 		if(distance >= 180){
 			// long distance
-			//System.out.println("far distance: " + distance);
+			System.out.println("far distance: " + distance);
 			index = roulletWheel(farActions);
 
 		}
@@ -395,7 +396,7 @@ public class FightingGameAI implements AIInterface {
 //		}
 		else if(distance < 180){
 			// close combat
-			//System.out.println("near distance: " + distance);
+			System.out.println("near distance: " + distance);
 			index = roulletWheel(nearActions);
 		}
 		
@@ -438,6 +439,7 @@ public class FightingGameAI implements AIInterface {
 		
 		for (int i = 0; i < reducedActionSet.length; i++){
 			summedProb += actionProbability[reducedActionSet[i].ordinal()][enemyAction.ordinal()];
+			//System.out.println("random: " + randomNumber + " summedprob: " + summedProb);
 			if(randomNumber < summedProb){
 				index = i;
 				break;
