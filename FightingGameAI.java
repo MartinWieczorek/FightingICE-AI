@@ -234,13 +234,24 @@ public class FightingGameAI implements AIInterface {
 	public void processing() 
 	{
 		// TODO Auto-generated method stub
+		if(!pastActions.isEmpty()){
+			System.out.println("\n num of frames: " + myMotionData.elementAt(myCharacter.getAction().ordinal()).getFrameNumber() + " " + myMotionData.elementAt(myCharacter.getAction().ordinal()).getMotionName()
+					+ "\n remaining frames: " + myCharacter.getRemainingFrame()
+					+ "\n cancelable frame: " + myMotionData.elementAt(myCharacter.getAction().ordinal()).getCancelAbleFrame()
+					+ "\n needed motionLevel: " + myMotionData.elementAt(myCharacter.getAction().ordinal()).getCancelAbleMotionLevel()
+					+ "\n motionLevel: " + myMotionData.elementAt(myCharacter.getAction().ordinal()).getMotionLevel());
+			
+		}
+		
+		
+		
 		if(!frameData.getEmptyFlag() && frameData.getRemainingTime() > 0){
 			if(commandCenter.getskillFlag()){
 				inputKey = commandCenter.getSkillKey();
 			}else{
 				long startTime = System.nanoTime();
 				
-				commandCenter.skillCancel();
+				//commandCenter.skillCancel();
 				
 				//measureEnergyConsuption();
 				// you find energy consuption in: 
@@ -366,7 +377,7 @@ public class FightingGameAI implements AIInterface {
 		
 		for(int i = 0; i < actionSet.length; i++){
 			actionProbability[actionSet[i].ordinal()][enemyAction.ordinal()] = actionValue[actionSet[i].ordinal()][enemyAction.ordinal()] / summedScore;
-			System.out.println(actionSet[i].name() + ": " + actionProbability[actionSet[i].ordinal()][enemyAction.ordinal()]);
+			//System.out.println(actionSet[i].name() + ": " + actionProbability[actionSet[i].ordinal()][enemyAction.ordinal()]);
 		}
 		
 	}
